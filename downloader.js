@@ -43,6 +43,9 @@ class QobuzDownloader {
             const tracks = data.data.tracks?.items || [];
             console.log(`Found ${tracks.length} tracks from API`);
             
+            // Mark that we successfully used the real API
+            this._lastSearchUsedAPI = true;
+            
             return tracks.map(track => ({
                 id: track.id.toString(),
                 title: track.title || 'Unknown Title',
@@ -54,6 +57,9 @@ class QobuzDownloader {
             }));
         } catch (error) {
             console.error('Error searching music via API:', error.message);
+            
+            // Mark that we're using fallback
+            this._lastSearchUsedAPI = false;
             
             // Fallback to mock data when API is unavailable (for demo/testing purposes)
             console.log('Falling back to mock data for demonstration...');
@@ -75,28 +81,46 @@ class QobuzDownloader {
                 artist: 'Artist Name 1',
                 album: 'Album Name 1',
                 duration: '3:45',
-                quality: 'FLAC 16bit/44.1kHz',
+                quality: 'FLAC 16bit/44.1kHz (Demo)',
                 _isMock: true
             },
             {
-                id: '2',
+                id: '2', 
                 title: `${query} - Song 2`,
                 artist: 'Artist Name 2',
                 album: 'Album Name 2',
                 duration: '4:12',
-                quality: 'FLAC 24bit/96kHz',
+                quality: 'FLAC 24bit/96kHz (Demo)',
                 _isMock: true
             },
             {
                 id: '3',
                 title: `${query} - Song 3`,
-                artist: 'Artist Name 3',
+                artist: 'Artist Name 3', 
                 album: 'Album Name 3',
                 duration: '2:58',
-                quality: 'FLAC 16bit/44.1kHz',
+                quality: 'FLAC 16bit/44.1kHz (Demo)',
                 _isMock: true
             }
         ];
+    }
+
+    /**
+     * Check if currently using API or mock data
+     * @returns {boolean} True if using real API, false if using mock data
+     */
+    isUsingRealAPI() {
+        return this._lastSearchUsedAPI === true;
+    }
+
+    /**
+     * Get status message for users about current mode
+     * @returns {string} Status message
+     */
+    getStatusMessage() {
+        return this.isUsingRealAPI() ? 
+            '🎵 Connected to Qobuz - Real music search active' :
+            '🚧 Demo Mode - API unavailable, showing demonstration content';
     }
 
     async getDownloadUrl(trackId, quality = '27') {
