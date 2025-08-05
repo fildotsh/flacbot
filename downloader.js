@@ -1,12 +1,25 @@
 const fs = require('fs-extra');
 const path = require('path');
 const readline = require('readline');
+const axios = require('axios');
 
 class QobuzDownloader {
-    constructor(baseUrl = 'https://eu.qobuz.squid.wtf') {
-        this.baseUrl = baseUrl;
+    constructor(baseUrl = null) {
+        // Use environment variable or provided URL or default
+        this.baseUrl = baseUrl || process.env.QOBUZ_BASE_URL || 'https://eu.qobuz.squid.wtf';
         this.downloadDir = path.join(__dirname, 'downloads');
         this.ensureDownloadDir();
+        
+        // Configure axios defaults
+        this.setupHttpClient();
+    }
+
+    /**
+     * Setup HTTP client with default configuration
+     */
+    setupHttpClient() {
+        // Set default timeout for all requests
+        axios.defaults.timeout = 30000; // 30 seconds
     }
 
     async ensureDownloadDir() {
@@ -21,19 +34,23 @@ class QobuzDownloader {
      */
     async searchMusic(query, offset = 0) {
         try {
-            const params = new URLSearchParams({
+            const params = {
                 q: query,
                 offset: offset.toString()
-            });
+            };
             
             console.log(`Attempting to search Qobuz API for: ${query}`);
-            const response = await fetch(`${this.baseUrl}/api/get-music?${params}`);
             
-            if (!response.ok) {
-                throw new Error(`API returned ${response.status}: ${response.statusText}`);
-            }
+            const response = await axios.get(`${this.baseUrl}/api/get-music`, {
+                params,
+                timeout: 10000, // 10 second timeout
+                headers: {
+                    'User-Agent': 'FlacBot/1.0.0',
+                    'Accept': 'application/json'
+                }
+            });
             
-            const data = await response.json();
+            const data = response.data;
             
             if (!data.success) {
                 throw new Error(data.error || 'API returned unsuccessful response');
@@ -41,7 +58,7 @@ class QobuzDownloader {
             
             // Convert real API response to bot-compatible format
             const tracks = data.data.tracks?.items || [];
-            console.log(`Found ${tracks.length} tracks from API`);
+            console.log(`✅ Found ${tracks.length} tracks from Qobuz API`);
             
             // Mark that we successfully used the real API
             this._lastSearchUsedAPI = true;
@@ -52,19 +69,54 @@ class QobuzDownloader {
                 artist: track.performer?.name || 'Unknown Artist',
                 album: track.album?.title || 'Unknown Album',
                 duration: this.formatDuration(track.duration),
-                quality: 'FLAC 16bit/44.1kHz', // Default quality display
+                quality: this.getQualityDescription(track.maximum_bit_depth, track.maximum_sampling_rate),
                 _originalTrack: track // Keep original for download
             }));
         } catch (error) {
-            console.error('Error searching music via API:', error.message);
+            const errorMessage = this.getErrorMessage(error);
+            console.error('❌ Error searching music via API:', errorMessage);
             
             // Mark that we're using fallback
             this._lastSearchUsedAPI = false;
             
             // Fallback to mock data when API is unavailable (for demo/testing purposes)
-            console.log('Falling back to mock data for demonstration...');
+            console.log('🚧 Falling back to mock data for demonstration...');
             return this.getMockSearchResults(query);
         }
+    }
+
+    /**
+     * Get a user-friendly error message
+     * @param {Error} error - The error object
+     * @returns {string} User-friendly error message
+     */
+    getErrorMessage(error) {
+        if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+            return 'Unable to connect to Qobuz API (network issue)';
+        }
+        if (error.code === 'ECONNREFUSED') {
+            return 'Qobuz API server is not responding';
+        }
+        if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
+            return 'Request to Qobuz API timed out';
+        }
+        if (error.response) {
+            return `API error ${error.response.status}: ${error.response.statusText}`;
+        }
+        return error.message || 'Unknown error occurred';
+    }
+
+    /**
+     * Get quality description from bit depth and sampling rate
+     * @param {number} bitDepth - Bit depth
+     * @param {number} samplingRate - Sampling rate
+     * @returns {string} Quality description
+     */
+    getQualityDescription(bitDepth, samplingRate) {
+        if (bitDepth && samplingRate) {
+            return `FLAC ${bitDepth}bit/${(samplingRate / 1000).toFixed(1)}kHz`;
+        }
+        return 'FLAC High Quality';
     }
 
     /**
@@ -118,37 +170,56 @@ class QobuzDownloader {
      * @returns {string} Status message
      */
     getStatusMessage() {
-        return this.isUsingRealAPI() ? 
-            '🎵 Connected to Qobuz - Real music search active' :
-            '🚧 Demo Mode - API unavailable, showing demonstration content';
+        if (this.isUsingRealAPI()) {
+            return '🎵 Connected to Qobuz - Real music search active';
+        } else {
+            return '🚧 Demo Mode - API unavailable, showing demonstration content\n' +
+                   '💡 Real music will be available when Qobuz API is accessible';
+        }
     }
 
     async getDownloadUrl(trackId, quality = '27') {
-        const params = new URLSearchParams({
+        const params = {
             track_id: trackId.toString(),
             quality: quality
+        };
+        
+        const response = await axios.get(`${this.baseUrl}/api/download-music`, {
+            params,
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'FlacBot/1.0.0',
+                'Accept': 'application/json'
+            }
         });
         
-        const response = await fetch(`${this.baseUrl}/api/download-music?${params}`);
-        const data = await response.json();
+        const data = response.data;
         
         if (!data.success) {
-            throw new Error(data.error);
+            throw new Error(data.error || 'Failed to get download URL');
         }
         
         return data.data.url;
     }
 
     async getAlbumDetails(albumId) {
-        const params = new URLSearchParams({
+        const params = {
             album_id: albumId
+        };
+        
+        const response = await axios.get(`${this.baseUrl}/api/get-album`, {
+            params,
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'FlacBot/1.0.0',
+                'Accept': 'application/json'
+            }
         });
         
-        const response = await fetch(`${this.baseUrl}/api/get-album?${params}`);
-        const data = await response.json();
+        const data = response.data;
         
         if (!data.success) {
-            throw new Error(data.error);
+            throw new Error(data.error || 'Failed to get album details');
         }
         
         return data.data;
@@ -181,19 +252,19 @@ class QobuzDownloader {
             }
             
             // Real API download
-            console.log('Getting download URL from Qobuz API...');
+            console.log('🔍 Getting download URL from Qobuz API...');
             const downloadUrl = await this.getDownloadUrl(track.id, quality);
-            console.log('Download URL obtained');
+            console.log('✅ Download URL obtained');
             
             // Download the file
-            console.log('Downloading FLAC file...');
-            const response = await fetch(downloadUrl);
-            if (!response.ok) {
-                throw new Error(`Download failed: ${response.statusText}`);
-            }
-            
-            // Get file as array buffer
-            const arrayBuffer = await response.arrayBuffer();
+            console.log('📥 Downloading FLAC file...');
+            const response = await axios.get(downloadUrl, {
+                responseType: 'arraybuffer',
+                timeout: 60000, // 60 second timeout for large files
+                headers: {
+                    'User-Agent': 'FlacBot/1.0.0'
+                }
+            });
             
             // Create filename and save
             const extension = this.getFileExtension(quality);
@@ -201,15 +272,15 @@ class QobuzDownloader {
             const filePath = path.join(this.downloadDir, filename);
             
             // Save to file
-            await fs.writeFile(filePath, Buffer.from(arrayBuffer));
+            await fs.writeFile(filePath, Buffer.from(response.data));
             
-            console.log(`Downloaded: ${filename}`);
+            console.log(`✅ Downloaded: ${filename}`);
             return filePath;
         } catch (error) {
-            console.error('Download error:', error);
+            console.error('❌ Download error:', this.getErrorMessage(error));
             
             // Fallback to mock download if real download fails
-            console.log('Falling back to mock download...');
+            console.log('🚧 Falling back to mock download...');
             return this.downloadMockTrack(track);
         }
     }

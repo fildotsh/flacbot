@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "demo": "node demo.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test-bot-init.js",
+    "test:init": "node test-bot-init.js"
   },
   "keywords": [
     "telegram",
@@ -18,7 +19,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.2",
+    "axios": "^1.11.0",
     "dotenv": "^17.2.1",
     "fs-extra": "^11.2.0",
     "node-telegram-bot-api": "^0.65.1"

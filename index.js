@@ -3,9 +3,9 @@ const QobuzDownloader = require('./downloader');
 const fs = require('fs-extra');
 
 class FlacBot {
-    constructor(token) {
+    constructor(token, qobuzBaseUrl = null) {
         this.bot = new TelegramBot(token, { polling: true });
-        this.downloader = new QobuzDownloader();
+        this.downloader = new QobuzDownloader(qobuzBaseUrl);
         this.userSessions = new Map(); // Store user search sessions
         this.setupHandlers();
     }
@@ -166,7 +166,10 @@ I can help you search and download high-quality FLAC music files.
 
         } catch (error) {
             console.error('Search error:', error);
-            await this.bot.sendMessage(chatId, '❌ An error occurred while searching. Please try again.');
+            const errorMessage = error.message.includes('network') || error.message.includes('connect') ?
+                '🌐 Connection issue with music service. Please try again later.' :
+                '❌ An error occurred while searching. Please try again.';
+            await this.bot.sendMessage(chatId, errorMessage);
         }
     }
 
@@ -256,7 +259,10 @@ I can help you search and download high-quality FLAC music files.
 
         } catch (error) {
             console.error('Download error:', error);
-            await this.bot.editMessageText('❌ Failed to download track. Please try again.', {
+            const errorMessage = error.message.includes('network') || error.message.includes('connect') ?
+                '🌐 Connection issue while downloading. Please try again later.' :
+                '❌ Failed to download track. Please try again.';
+            await this.bot.editMessageText(errorMessage, {
                 chat_id: chatId,
                 message_id: messageId
             });
@@ -290,15 +296,21 @@ I can help you search and download high-quality FLAC music files.
 if (require.main === module) {
     require('dotenv').config();
     const BOT_TOKEN = process.env.BOT_TOKEN;
+    const QOBUZ_BASE_URL = process.env.QOBUZ_BASE_URL;
     
     if (!BOT_TOKEN) {
         console.error('❌ BOT_TOKEN environment variable is required!');
         console.log('Please set your Telegram Bot Token:');
         console.log('export BOT_TOKEN="your_bot_token_here"');
+        console.log('\nOptional: Set custom Qobuz API URL:');
+        console.log('export QOBUZ_BASE_URL="https://your.custom.api.url"');
         process.exit(1);
     }
 
-    const bot = new FlacBot(BOT_TOKEN);
+    console.log('🎵 Starting FlacBot...');
+    console.log(`📡 Qobuz API endpoint: ${QOBUZ_BASE_URL || 'https://eu.qobuz.squid.wtf'} (default)`);
+    
+    const bot = new FlacBot(BOT_TOKEN, QOBUZ_BASE_URL);
     bot.start();
 }
 
