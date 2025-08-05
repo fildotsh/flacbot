@@ -147,7 +147,14 @@ I can help you search and download high-quality FLAC music files.
                 callback_data: 'new_search'
             }]);
 
-            const resultMessage = `🎵 Found ${searchResults.length} results for "${query}":\n\nClick on a track to download:`;
+            // Create result message with status
+            let resultMessage = `🎵 Found ${searchResults.length} results for "${query}":\n\n`;
+            
+            // Add status message about API availability
+            const statusMessage = this.downloader.getStatusMessage();
+            resultMessage += `${statusMessage}\n\n`;
+            
+            resultMessage += 'Click on a track to download:';
 
             await this.bot.editMessageText(resultMessage, {
                 chat_id: chatId,
@@ -218,7 +225,8 @@ I can help you search and download high-quality FLAC music files.
             }
 
             // Update message to show downloading status
-            await this.bot.editMessageText(`⬬ Downloading: ${track.title} by ${track.artist}...`, {
+            const downloadType = track._isMock ? 'demo file' : 'FLAC track';
+            await this.bot.editMessageText(`⬬ Downloading ${downloadType}: ${track.title} by ${track.artist}...`, {
                 chat_id: chatId,
                 message_id: messageId,
                 reply_markup: { inline_keyboard: [] }
@@ -228,12 +236,17 @@ I can help you search and download high-quality FLAC music files.
             const filePath = await this.downloader.downloadTrack(track);
 
             // Send the file
+            const caption = this.downloader.formatTrackInfo(track);
             await this.bot.sendDocument(chatId, filePath, {
-                caption: this.downloader.formatTrackInfo(track)
+                caption: caption
             });
 
             // Update the download message
-            await this.bot.editMessageText(`✅ Successfully sent: ${track.title} by ${track.artist}`, {
+            const successMessage = track._isMock ? 
+                `✅ Demo file sent: ${track.title} by ${track.artist}\n🚧 This is demonstration content. Real music will be available when API is accessible.` :
+                `✅ Successfully sent: ${track.title} by ${track.artist}`;
+                
+            await this.bot.editMessageText(successMessage, {
                 chat_id: chatId,
                 message_id: messageId
             });
