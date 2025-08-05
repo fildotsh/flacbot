@@ -42,6 +42,16 @@ A Telegram bot for downloading high-quality FLAC music files. This bot transform
    npm start
    ```
 
+### Demo Mode
+
+To see how the bot works without setting up a Telegram bot token:
+
+```bash
+npm run demo
+```
+
+This will simulate the complete bot workflow including search, selection, and download processes.
+
 ## Usage
 
 ### Bot Commands
