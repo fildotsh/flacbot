@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "demo": "node demo.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test-bot-init.js",
+    "test:init": "node test-bot-init.js"
   },
   "keywords": [
     "telegram",
